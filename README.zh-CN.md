@@ -10,7 +10,7 @@
 
 | OpenCode 插件 | DSH 等价物 |
 | --- | --- |
-| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `~/.dsh/settings.yaml` 的 `llm-pi-ai.providers.codebuddy` 路由;登录后由本插件把真实模型列表同步进去 |
+| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `llm-pi-ai.providers.codebuddy` 路由——本插件**首次启动时自动创建**,登录后把真实模型列表同步进去 |
 | `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | 本插件注册的 `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动时自动续期 |
 | token 存 `auth.json` | `ctx.credentials` 凭据服务(`~/.dsh/.credentials.yaml`,逐请求解析,热生效) |
 
@@ -33,41 +33,11 @@ npm install github:cainiao1992/dsh-codebuddy-auth
       name: dsh-codebuddy-auth
 ```
 
-### 3. 添加模型路由
+### 3. 登录
 
-在 `~/.dsh/settings.yaml` 顶层加入(模型表先用最小占位,登录后插件会同步成你账号的真实列表):
+重启 DSH,安装即完成——首次启动时插件会**自动创建 `llm-pi-ai.providers.codebuddy` 路由**(带一个占位模型表),因此 CodeBuddy 未登录也会出现在模型页。然后对 agent 说 **"用 codebuddy 登录"**:agent 调用 `codebuddy` 工具,浏览器打开 IOA 登录页,后台每 3 秒轮询;token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并把占位模型替换成你账号在 `/v3/config` 的真实列表。
 
-```yaml
-llm-pi-ai:
-  providers:
-    codebuddy:
-      displayName: CodeBuddy
-      api: openai-completions
-      baseURL: https://copilot.tencent.com/v2
-      apiKeyEnv: CODEBUDDY_ACCESS_TOKEN
-      headers:
-        X-Requested-With: XMLHttpRequest
-        X-Agent-Intent: craft
-        X-IDE-Type: VSCode
-        X-IDE-Name: VSCode
-        X-IDE-Version: 1.119.0
-        X-Product-Version: 4.9.29177644
-        X-Env-ID: production
-        X-Domain: www.codebuddy.cn
-        X-Product: SaaS
-      models:
-        - id: auto
-          name: Auto
-          contextWindow: 168000
-```
-
-> 已有其他 `llm-pi-ai.providers` 条目的,只需把 `codebuddy` 追加进同一字典。
-
-### 4. 登录
-
-重启 DSH 后,对 agent 说 **"用 codebuddy 登录"**,agent 会调用 `codebuddy` 工具:浏览器打开 IOA 登录页,后台每 3 秒轮询,token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并从 `/v3/config` 同步真实模型列表。
-
-也可以在 DSH 外用 CLI(headless / 提前引导):
+> 也可以完全跳过 DSH 流程,用命令行登录(headless / 提前引导):
 
 ```bash
 # 按第 1 步装进 profile 后直接运行(无 npm 依赖,仅需 Node >= 18):
@@ -79,7 +49,7 @@ cd ~/.dsh/profiles/web && npm exec codebuddy-login
 # 不想开浏览器(远程/服务器)加 --no-browser
 ```
 
-CLI 只写凭据;身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
+CLI 只写凭据;路由的创建与身份头、模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
 
 ## 使用
 

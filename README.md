@@ -10,7 +10,7 @@ The original OpenCode plugin works through three hooks; this package maps each o
 
 | OpenCode plugin | DSH equivalent |
 | --- | --- |
-| `config` hook: register provider + discover models from `/v3/config` | the `llm-pi-ai.providers.codebuddy` route in `~/.dsh/settings.yaml`; after login this plugin syncs the real model list into it |
+| `config` hook: register provider + discover models from `/v3/config` | the `llm-pi-ai.providers.codebuddy` route, which this plugin **creates on first boot** and syncs the real model list into after login |
 | `auth` hook: IOA browser OAuth + polling + refresh | the `codebuddy` model tool this plugin registers (`login` / `status` / `refresh` / `logout` / `sync-models`) + automatic renewal at startup |
 | token stored in `auth.json` | the `ctx.credentials` credential service (`~/.dsh/.credentials.yaml`, resolved per request, hot-swapped) |
 
@@ -33,41 +33,11 @@ Add one row to the `insert` list in `~/.dsh/profiles/web/cordis.patch.yml`:
       name: dsh-codebuddy-auth
 ```
 
-### 3. Add the model route
+### 3. Log in
 
-Add this at the top level of `~/.dsh/settings.yaml` (a minimal placeholder model list is fine — the plugin replaces it with your account's real list after login):
+Restart DSH. That's it for setup — on first boot the plugin **creates the `llm-pi-ai.providers.codebuddy` route itself** (with a placeholder model list), so CodeBuddy already shows in the Models page, unauthenticated. Now tell the agent **"log in with codebuddy"** — the agent calls the `codebuddy` tool: the browser opens the IOA login page, the tool polls every 3 seconds in the background, and once the token arrives it automatically writes credentials, writes JWT-derived identity headers (`X-User-Id` etc.) into the route, and replaces the placeholder models with your account's real `/v3/config` list.
 
-```yaml
-llm-pi-ai:
-  providers:
-    codebuddy:
-      displayName: CodeBuddy
-      api: openai-completions
-      baseURL: https://copilot.tencent.com/v2
-      apiKeyEnv: CODEBUDDY_ACCESS_TOKEN
-      headers:
-        X-Requested-With: XMLHttpRequest
-        X-Agent-Intent: craft
-        X-IDE-Type: VSCode
-        X-IDE-Name: VSCode
-        X-IDE-Version: 1.119.0
-        X-Product-Version: 4.9.29177644
-        X-Env-ID: production
-        X-Domain: www.codebuddy.cn
-        X-Product: SaaS
-      models:
-        - id: auto
-          name: Auto
-          contextWindow: 168000
-```
-
-> If you already have other `llm-pi-ai.providers` entries, just append `codebuddy` to the same dict.
-
-### 4. Log in
-
-After restarting DSH, tell the agent **"log in with codebuddy"** — the agent calls the `codebuddy` tool: the browser opens the IOA login page, the tool polls every 3 seconds in the background, and once the token arrives it automatically writes credentials, writes JWT-derived identity headers (`X-User-Id` etc.) into the route, and syncs the real model list from `/v3/config`.
-
-You can also use the CLI outside DSH (headless / bootstrapping):
+> You can skip the DSH flow entirely and log in from the command line (headless / bootstrapping):
 
 ```bash
 # Run directly after installing into the profile per step 1 (no npm deps, Node >= 18 only):
@@ -79,7 +49,7 @@ cd ~/.dsh/profiles/web && npm exec codebuddy-login
 # Add --no-browser on a remote server / headless box
 ```
 
-The CLI only writes credentials; identity headers and the model list are filled in by the mounted plugin at its next startup (or when the `codebuddy` tool is invoked).
+The CLI only writes credentials; the plugin creates the route and fills in identity headers and the model list at its next startup (or when the `codebuddy` tool is invoked).
 
 ## Usage
 
