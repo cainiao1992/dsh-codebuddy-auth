@@ -16,40 +16,47 @@ The original OpenCode plugin works through three hooks; this package maps each o
 
 ## Installation
 
-### 1. Install the package
+DSH installs profile plugins through its official `dsh plugin` CLI (a thin `pnpm` forwarder that installs the dependency, appends the package to the profile's `dsh.profile.bundles` layer stack, and mounts the plugin via the bundle's in-package patch — no manual file editing needed).
+
+**Prerequisite**: make sure `pnpm` is on your PATH, e.g. via Homebrew:
 
 ```bash
-cd ~/.dsh/profiles/web
-npm install github:cainiao1992/dsh-codebuddy-auth
+brew install pnpm
 ```
 
-### 2. Mount the plugin
+### 1. Install
 
-Add one row to the `insert` list in `~/.dsh/profiles/web/cordis.patch.yml`:
-
-```yaml
-- insert:
-    - id: codebuddy-auth
-      name: dsh-codebuddy-auth
+```bash
+dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
 ```
 
-### 3. Log in
+This single command resolves the dependency from GitHub, installs it, and automatically activates the plugin as a profile layer.
+
+### 2. Log in
 
 Restart DSH. That's it for setup — on first boot the plugin **creates the `llm-pi-ai.providers.codebuddy` route itself** (with a placeholder model list), so CodeBuddy already shows in the Models page, unauthenticated. Now tell the agent **"log in with codebuddy"** — the agent calls the `codebuddy` tool: the browser opens the IOA login page, the tool polls every 3 seconds in the background, and once the token arrives it automatically writes credentials, writes JWT-derived identity headers (`X-User-Id` etc.) into the route, and replaces the placeholder models with your account's real `/v3/config` list.
 
 > You can skip the DSH flow entirely and log in from the command line (headless / bootstrapping):
 
 ```bash
-# Run directly after installing into the profile per step 1 (no npm deps, Node >= 18 only):
+# Run directly after installing into the profile (no npm deps, Node >= 18 only):
 node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
 
 # Or resolve the local bin through package.json from the install directory:
-cd ~/.dsh/profiles/web && npm exec codebuddy-login
+cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 
 # Add --no-browser on a remote server / headless box
 ```
 
 The CLI only writes credentials; the plugin creates the route and fills in identity headers and the model list at its next startup (or when the `codebuddy` tool is invoked).
+
+### Uninstall
+
+```bash
+dsh plugin --profile web remove dsh-codebuddy-auth
+```
+
+This removes the dependency and takes the plugin back out of the profile layer stack. Restart DSH to unload it.
 
 ## Usage
 

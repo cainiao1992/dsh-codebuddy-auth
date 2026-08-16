@@ -16,24 +16,23 @@
 
 ## 安装
 
-### 1. 安装包
+DSH 通过官方 `dsh plugin` CLI 安装 profile 插件(它是个精简的 `pnpm` 转发器:安装依赖、把包追加到 profile 的 `dsh.profile.bundles` 层栈、再经包内的 patch 挂载插件——全程无需手动改文件)。
+
+**前置条件**:确保 `pnpm` 在 PATH 里,例如用 Homebrew 安装:
 
 ```bash
-cd ~/.dsh/profiles/web
-npm install github:cainiao1992/dsh-codebuddy-auth
+brew install pnpm
 ```
 
-### 2. 挂载插件
+### 1. 安装
 
-在 `~/.dsh/profiles/web/cordis.patch.yml` 的 `insert` 列表里加一行:
-
-```yaml
-- insert:
-    - id: codebuddy-auth
-      name: dsh-codebuddy-auth
+```bash
+dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
 ```
 
-### 3. 登录
+这一条命令即从 GitHub 解析依赖、安装,并自动把插件作为 profile 层激活。
+
+### 2. 登录
 
 重启 DSH,安装即完成——首次启动时插件会**自动创建 `llm-pi-ai.providers.codebuddy` 路由**(带一个占位模型表),因此 CodeBuddy 未登录也会出现在模型页。然后对 agent 说 **"用 codebuddy 登录"**:agent 调用 `codebuddy` 工具,浏览器打开 IOA 登录页,后台每 3 秒轮询;token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并把占位模型替换成你账号在 `/v3/config` 的真实列表。
 
@@ -44,12 +43,20 @@ npm install github:cainiao1992/dsh-codebuddy-auth
 node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
 
 # 或经 package.json 的 bin 字段从安装目录本地解析:
-cd ~/.dsh/profiles/web && npm exec codebuddy-login
+cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 
 # 不想开浏览器(远程/服务器)加 --no-browser
 ```
 
 CLI 只写凭据;路由的创建与身份头、模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
+
+### 卸载
+
+```bash
+dsh plugin --profile web remove dsh-codebuddy-auth
+```
+
+该命令会移除依赖,并把插件从 profile 层栈中摘除。重启 DSH 即完成卸载。
 
 ## 使用
 
