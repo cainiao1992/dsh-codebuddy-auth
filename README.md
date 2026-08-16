@@ -80,15 +80,9 @@ Everything else follows automatically:
 - **`X-Domain` header** follows the baseURL automatically — the plugin rewrites it to `www.codebuddy.ai` whenever the route points at `codebuddy.ai` (the `sync-models` action, login, and startup all refresh it).
 - **Login / refresh / model discovery** (`/v3/config`) automatically use the international endpoints, because the plugin derives its `serverUrl`/`domain` from the same `baseURL`.
 
-If the route already exists, you can also just edit `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
-
-```yaml
-baseURL: https://www.codebuddy.ai/v2
-```
-
 Omit `--international` to log into the China edition (the default).
 
-> Tip: switch back to the China edition by setting `baseURL` back to `https://copilot.tencent.com/v2`.
+> Tip: switch back to the China edition by logging in without the flag (`codebuddy-login`), which resets the route to `https://copilot.tencent.com/v2`.
 
 ## Files
 

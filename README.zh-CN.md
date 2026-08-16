@@ -80,15 +80,9 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 - **`X-Domain` 请求头**自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就自动把它改写成 `www.codebuddy.ai`(`sync-models` 动作、登录、启动时都会刷新)。
 - **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
 
-如果路由已存在,也可以直接编辑 `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
-
-```yaml
-baseURL: https://www.codebuddy.ai/v2
-```
-
 不加 `--international` 即登录国内版(默认)。
 
-> 提示:把 `baseURL` 改回 `https://copilot.tencent.com/v2` 即切回国内版。
+> 提示:不带参数执行 `codebuddy-login` 即切回国内版(会把路由重置为 `https://copilot.tencent.com/v2`)。
 
 ## 文件
 
