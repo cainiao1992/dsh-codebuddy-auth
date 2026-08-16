@@ -1,0 +1,8 @@
+# The dsh-codebuddy-auth bundle patch: inserts this plugin over any
+# composition that already provides the `tools`, `settings`, and
+# `credentials` services (the dsh base and web profiles both do). Config
+# keys omitted here keep their schema defaults.
+
+- insert:
+    - id: codebuddy-auth
+      name: dsh-codebuddy-auth
