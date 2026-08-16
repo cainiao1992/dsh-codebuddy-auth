@@ -83,7 +83,7 @@ CLI 只写凭据;身份头与模型列表由已挂载的插件在下一次启动
 
 - **切换模型**:模型选择器里选 CodeBuddy 下的任意模型(如 `deepseek-v4-pro`)
 - **状态**:"看下 codebuddy 状态" → `codebuddy` 工具 `status`
-- **续期**:token 过期前插件启动时自动用 refresh token 续期;过期了说 "刷新 codebuddy" 或重新登录
+- **续期(全自动,三层)**:① 每次启动时,token 剩余有效期不足 5 分钟(或已过期)即自动续;② 运行中每 30 分钟巡检,剩余不足 1 小时自动续——覆盖 dsh 长期不重启的场景;③ refresh token 失效(改密/吊销)时前两层会失败并留日志,此时说 "刷新 codebuddy" 确认,或重新登录
 - **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
 - **退出**:"登出 codebuddy" → 清除凭据
 
