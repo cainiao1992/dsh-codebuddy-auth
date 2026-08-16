@@ -1,29 +1,31 @@
 # dsh-codebuddy-auth
 
-[ kuops/opencode-codebuddy-auth ](https://github.com/kuops/opencode-codebuddy-auth) 的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(DSH)移植版——在 DSH 里直接使用腾讯 CodeBuddy(IOA)的对话模型:浏览器 OAuth 登录、token 自动续期、模型列表自动同步。登录一次,模型选择器里即可选用 `deepseek-v4-pro`、`glm-5.2`、`kimi-k3-1`、`minimax-m3` 等 craft agent 模型。
+English | [简体中文](README.zh-CN.md)
 
-## 工作原理
+A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) port of [kuops/opencode-codebuddy-auth](https://github.com/kuops/opencode-codebuddy-auth) — use Tencent CodeBuddy (IOA) chat models directly in DSH: browser OAuth login, automatic token renewal, and automatic model-list sync. Log in once, and craft-agent models such as `deepseek-v4-pro`, `glm-5.2`, `kimi-k3-1`, and `minimax-m3` appear in the model picker.
 
-原 OpenCode 插件靠三个 hook 工作;本包把它们分别落到 DSH 的原生接缝上,请求路径零拦截(DSH 的 pi-ai 适配器原生说 OpenAI-completions 协议,凭据值自动作为 `Authorization: Bearer` 发送,路由 `headers` 原样透传):
+## How it works
 
-| OpenCode 插件 | DSH 等价物 |
+The original OpenCode plugin works through three hooks; this package maps each one onto a native DSH seam, with zero interception on the request path (DSH's pi-ai adapter natively speaks the OpenAI-completions protocol, the credential value is sent automatically as `Authorization: Bearer`, and route `headers` pass through verbatim):
+
+| OpenCode plugin | DSH equivalent |
 | --- | --- |
-| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `~/.dsh/settings.yaml` 的 `llm-pi-ai.providers.codebuddy` 路由;登录后由本插件把真实模型列表同步进去 |
-| `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | 本插件注册的 `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动时自动续期 |
-| token 存 `auth.json` | `ctx.credentials` 凭据服务(`~/.dsh/.credentials.yaml`,逐请求解析,热生效) |
+| `config` hook: register provider + discover models from `/v3/config` | the `llm-pi-ai.providers.codebuddy` route in `~/.dsh/settings.yaml`; after login this plugin syncs the real model list into it |
+| `auth` hook: IOA browser OAuth + polling + refresh | the `codebuddy` model tool this plugin registers (`login` / `status` / `refresh` / `logout` / `sync-models`) + automatic renewal at startup |
+| token stored in `auth.json` | the `ctx.credentials` credential service (`~/.dsh/.credentials.yaml`, resolved per request, hot-swapped) |
 
-## 安装
+## Installation
 
-### 1. 安装包
+### 1. Install the package
 
 ```bash
 cd ~/.dsh/profiles/web
 npm install github:cainiao1992/dsh-codebuddy-auth
 ```
 
-### 2. 挂载插件
+### 2. Mount the plugin
 
-在 `~/.dsh/profiles/web/cordis.patch.yml` 的 `insert` 列表里加一行:
+Add one row to the `insert` list in `~/.dsh/profiles/web/cordis.patch.yml`:
 
 ```yaml
 - insert:
@@ -31,9 +33,9 @@ npm install github:cainiao1992/dsh-codebuddy-auth
       name: dsh-codebuddy-auth
 ```
 
-### 3. 添加模型路由
+### 3. Add the model route
 
-在 `~/.dsh/settings.yaml` 顶层加入(模型表先用最小占位,登录后插件会同步成你账号的真实列表):
+Add this at the top level of `~/.dsh/settings.yaml` (a minimal placeholder model list is fine — the plugin replaces it with your account's real list after login):
 
 ```yaml
 llm-pi-ai:
@@ -59,47 +61,47 @@ llm-pi-ai:
           contextWindow: 168000
 ```
 
-> 已有其他 `llm-pi-ai.providers` 条目的,只需把 `codebuddy` 追加进同一字典。
+> If you already have other `llm-pi-ai.providers` entries, just append `codebuddy` to the same dict.
 
-### 4. 登录
+### 4. Log in
 
-重启 DSH 后,对 agent 说 **"用 codebuddy 登录"**,agent 会调用 `codebuddy` 工具:浏览器打开 IOA 登录页,后台每 3 秒轮询,token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并从 `/v3/config` 同步真实模型列表。
+After restarting DSH, tell the agent **"log in with codebuddy"** — the agent calls the `codebuddy` tool: the browser opens the IOA login page, the tool polls every 3 seconds in the background, and once the token arrives it automatically writes credentials, writes JWT-derived identity headers (`X-User-Id` etc.) into the route, and syncs the real model list from `/v3/config`.
 
-也可以在 DSH 外用 CLI(headless / 提前引导):
+You can also use the CLI outside DSH (headless / bootstrapping):
 
 ```bash
-# 按第 1 步装进 profile 后直接运行(无 npm 依赖,仅需 Node >= 18):
+# Run directly after installing into the profile per step 1 (no npm deps, Node >= 18 only):
 node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
 
-# 或经 package.json 的 bin 字段从安装目录本地解析:
+# Or resolve the local bin through package.json from the install directory:
 cd ~/.dsh/profiles/web && npm exec codebuddy-login
 
-# 不想开浏览器(远程/服务器)加 --no-browser
+# Add --no-browser on a remote server / headless box
 ```
 
-CLI 只写凭据;身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
+The CLI only writes credentials; identity headers and the model list are filled in by the mounted plugin at its next startup (or when the `codebuddy` tool is invoked).
 
-## 使用
+## Usage
 
-- **切换模型**:模型选择器里选 CodeBuddy 下的任意模型(如 `deepseek-v4-pro`)
-- **状态**:"看下 codebuddy 状态" → `codebuddy` 工具 `status`
-- **续期(全自动,三层)**:① 每次启动时,token 剩余有效期不足 5 分钟(或已过期)即自动续;② 运行中每 30 分钟巡检,剩余不足 1 小时自动续——覆盖 dsh 长期不重启的场景;③ refresh token 失效(改密/吊销)时前两层会失败并留日志,此时说 "刷新 codebuddy" 确认,或重新登录
-- **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
-- **退出**:"登出 codebuddy" → 清除凭据
+- **Switch models**: pick any model under CodeBuddy in the model picker (e.g. `deepseek-v4-pro`)
+- **Status**: "check codebuddy status" → the `codebuddy` tool's `status` action
+- **Renewal (automatic, three layers)**: ① at every startup, the token is renewed when less than 5 minutes of validity remains (or it has already expired); ② while running, a check every 30 minutes renews whenever less than 1 hour remains — covering a long-lived dsh that never restarts; ③ if the refresh token itself is invalidated (password change / revocation), the first two layers fail and log it — then say "refresh codebuddy" to confirm, or log in again
+- **Model updates**: after Tencent ships new models, say "sync codebuddy models" → `sync-models`
+- **Logout**: "log out of codebuddy" → clears stored credentials
 
-## 文件
+## Files
 
-- `lib/index.js` — Cordis 宿主插件(host 组合行)。注册 `codebuddy` 工具,启动时自动刷新/同步。
-- `lib/codebuddy-core.mjs` — OAuth、JWT 解码、`/v3/config` 发现的核心逻辑,无依赖。
-- `bin/login-flow.mjs` — 独立登录 CLI,无 npm 依赖。
-- `cordis.patch.yml` — 包内 patch(bundle 消费时的自挂载行)。
+- `lib/index.js` — the Cordis host plugin (host composition row). Registers the `codebuddy` tool; refreshes/syncs at startup.
+- `lib/codebuddy-core.mjs` — core OAuth, JWT decoding, and `/v3/config` discovery logic; dependency-free.
+- `bin/login-flow.mjs` — standalone login CLI; no npm dependencies.
+- `cordis.patch.yml` — in-package patch (self-mount row for bundle consumers).
 
-## 已知限制(均为实测结论)
+## Known limitations (all verified empirically)
 
-- `POST /v2/chat/completions` **不校验 User-Agent**,任意 UA 均可;但必须 `stream: true`(非流式返回 `code 11101`)。DSH 的 pi-ai 适配器本来就是流式,无需处理。
-- `GET /v3/config`(模型发现)**校验 User-Agent**,非 VSCode 形态的 UA 返回 400。插件的 `fetchRemoteModels` 是自己直接发请求(不经过 DSH 的 user-agent 归属覆盖),已显式携带 VSCode UA。
-- 模型按非推理模型声明(不发送 reasoning 参数),与原 OpenCode 插件行为一致;接口显示全部模型 supportsReasoning,需要的话可在路由加 `compat`。
-- 国际版:把 `baseURL` 换成 `https://www.codebuddy.ai/v2`、`X-Domain` 换成 `www.codebuddy.ai`。
+- `POST /v2/chat/completions` **does not check User-Agent** — any UA works; but the request must be `stream: true` (non-streaming returns `code 11101`). DSH's pi-ai adapter is streaming by default, so nothing to handle.
+- `GET /v3/config` (model discovery) **does check User-Agent** — any non-VSCode-shaped UA gets a 400. The plugin's `fetchRemoteModels` sends its own direct request (bypassing DSH's user-agent attribution override) and explicitly carries a VSCode UA.
+- Models are declared as non-reasoning (no reasoning parameters sent), matching the original OpenCode plugin's behavior; the API reports supportsReasoning for every model, so add `compat` on the route if you want it.
+- International edition: switch `baseURL` to `https://www.codebuddy.ai/v2` and `X-Domain` to `www.codebuddy.ai`.
 
 ## License
 
