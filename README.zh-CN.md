@@ -10,21 +10,21 @@
 
 | OpenCode 插件 | DSH 等价物 |
 | --- | --- |
-| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `llm-pi-ai.providers.codebuddy` 路由——本插件**首次启动时自动创建**,登录后把真实模型列表同步进去 |
-| `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | 本插件注册的 `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动时自动续期 |
+| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `llm-pi-ai.providers.codebuddy` 路由——插件**首次启动时自动创建**,登录后把真实模型列表同步进去 |
+| `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | 插件注册的 `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动时自动续期 |
 | token 存 `auth.json` | `ctx.credentials` 凭据服务(`~/.dsh/.credentials.yaml`,逐请求解析,热生效) |
 
 ## 安装
 
 DSH 通过官方 `dsh plugin` CLI 安装 profile 插件(它是个精简的 `pnpm` 转发器:安装依赖、把包追加到 profile 的 `dsh.profile.bundles` 层栈、再经包内的 patch 挂载插件——全程无需手动改文件)。
 
-**前置条件**:确保 `pnpm` 在 PATH 里,例如用 Homebrew 安装:
+**前置条件**:确保 `pnpm` 在 `PATH` 里,例如用 Homebrew 安装:
 
 ```bash
 brew install pnpm
 ```
 
-### 1. 安装
+### 安装插件
 
 ```bash
 dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
@@ -32,14 +32,22 @@ dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
 
 这一条命令即从 GitHub 解析依赖、安装,并自动把插件作为 profile 层激活。
 
-### 2. 登录
+### 重启 DSH
 
-重启 DSH,安装即完成——首次启动时插件会**自动创建 `llm-pi-ai.providers.codebuddy` 路由**(带一个占位模型表),因此 CodeBuddy 未登录也会出现在模型页。然后对 agent 说 **"用 codebuddy 登录"**:agent 调用 `codebuddy` 工具,浏览器打开 IOA 登录页,后台每 3 秒轮询;token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并把占位模型替换成你账号在 `/v3/config` 的真实列表。
+重启 DSH,安装即完成——首次启动时插件会**自动创建 `llm-pi-ai.providers.codebuddy` 路由**(带一个占位模型表),因此 CodeBuddy 未登录也会出现在模型页。
 
-> 也可以完全跳过 DSH 流程,用命令行登录(headless / 提前引导):
+## 登录
+
+可以用 agent 登录,也可以用命令行登录,二选一。
+
+### 方式一:通过 agent
+
+对 agent 说 **"用 codebuddy 登录"**。agent 调用 `codebuddy` 工具:浏览器打开 IOA 登录页,后台轮询;token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并把占位模型替换成你账号在 `/v3/config` 的真实列表。
+
+### 方式二:命令行(headless / 提前引导)
 
 ```bash
-# 按第 1 步装进 profile 后直接运行(无 npm 依赖,仅需 Node >= 18):
+# 直接运行,无 npm 依赖,仅需 Node >= 18:
 node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
 
 # 或经 package.json 的 bin 字段从安装目录本地解析:
@@ -50,7 +58,7 @@ cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 
 CLI 会写入凭据**并确保** `settings.yaml` 里有 `llm-pi-ai.providers.codebuddy` 路由(默认国内版;`--international` 会预建国际版路由)。身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
 
-### 卸载
+## 卸载
 
 ```bash
 dsh plugin --profile web remove dsh-codebuddy-auth
@@ -58,17 +66,9 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 
 该命令会移除依赖,并把插件从 profile 层栈中摘除。重启 DSH 即完成卸载。
 
-## 使用
-
-- **切换模型**:模型选择器里选 CodeBuddy 下的任意模型(如 `deepseek-v4-pro`)
-- **状态**:"看下 codebuddy 状态" → `codebuddy` 工具 `status`
-- **续期(全自动,三层)**:① 每次启动时,token 剩余有效期不足 5 分钟(或已过期)即自动续;② 运行中每 30 分钟巡检,剩余不足 1 小时自动续——覆盖 dsh 长期不重启的场景;③ refresh token 失效(改密/吊销)时前两层会失败并留日志,此时说 "刷新 codebuddy" 确认,或重新登录
-- **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
-- **退出**:"登出 codebuddy" → 清除凭据
-
 ## 国际版
 
-插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),最简单的方式是用 CLI 的 `--international` 登录——它不只登录到 `codebuddy.ai`,还会**帮你把 `llm-pi-ai.providers.codebuddy` 路由指向国际版 API**,因此全新安装(还没有路由、插件还没跑过)也能直接走国际版:
+插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),用 CLI 的 `--international` 登录——它不只登录到 `codebuddy.ai`,还会把 `llm-pi-ai.providers.codebuddy` 路由指向国际版 API,因此全新安装(还没有路由)也能直接走国际版:
 
 ```bash
 codebuddy-login --international   # 或 node bin/login-flow.mjs --international
@@ -77,12 +77,18 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 其余全自动跟随:
 
 - **聊天请求**走 `https://www.codebuddy.ai/v2`(路由的 `baseURL`)。
-- **`X-Domain` 请求头**自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就自动把它改写成 `www.codebuddy.ai`(`sync-models` 动作、登录、启动时都会刷新)。
+- **`X-Domain`** 自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就把它改写成 `www.codebuddy.ai`。
 - **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
 
 不加 `--international` 即登录国内版(默认)。
 
-> 提示:不带参数执行 `codebuddy-login` 即切回国内版(会把路由重置为 `https://copilot.tencent.com/v2`)。
+## 使用
+
+- **切换模型**:模型选择器里选 CodeBuddy 下的任意模型(如 `deepseek-v4-pro`)
+- **状态**:"看下 codebuddy 状态" → `codebuddy` 工具 `status`
+- **续期(全自动,三层)**:① 每次启动时,token 剩余有效期不足 5 分钟(或已过期)即自动续;② 运行中每 30 分钟巡检,剩余不足 1 小时自动续——覆盖 dsh 长期不重启的场景;③ refresh token 失效(改密/吊销)时前两层会失败并留日志,此时说 "刷新 codebuddy" 确认,或重新登录
+- **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
+- **退出**:"登出 codebuddy" → 清除凭据
 
 ## 文件
 
