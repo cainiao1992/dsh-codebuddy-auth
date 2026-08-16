@@ -1,0 +1,50 @@
+# Release on tag push.
+#
+# Pushing a tag matching v* (e.g. `git tag v0.3.0 && git push origin v0.3.0`)
+# creates (or updates) a GitHub Release for it: release notes are generated
+# automatically from the commits between the previous tag and this one, and
+# the npm-packed tarball is attached as an asset so users can also install it
+# directly (`npm install /path/to/dsh-codebuddy-auth-<ver>.tgz`) or reference
+# the tag (`npm install github:cainiao1992/dsh-codebuddy-auth#v0.3.0`).
+
+name: release
+
+'on':
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verify the version matches the tag
+        run: |
+          ver="$(node -p "require('./package.json').version")"
+          tag="${{ github.ref_name }}"
+          echo "package version: $ver ; tag: $tag"
+          if [ "$tag" != "v$ver" ]; then
+            echo "::error::package.json version ($ver) does not match tag ($tag) — bump it first"
+            exit 1
+          fi
+
+      - name: Pack the tarball
+        run: npm pack
+
+      - name: Create or update the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: '*.tgz'
