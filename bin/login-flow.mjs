@@ -27,6 +27,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   DEFAULTS,
+  EDITIONS,
   requestAuthState,
   pollForToken,
   tokenExpiresAt,
@@ -70,14 +71,13 @@ async function main() {
   const stateIdx = args.indexOf('--state');
   const stateFile = stateIdx >= 0 ? args[stateIdx + 1] : null;
 
-  // Region: China edition (default) vs international (codebuddy.ai). The core
-  // helpers all take a `cfg`; overriding just serverUrl/domain switches every
-  // OAuth call to the target region without touching DEFAULTS.
+  // Region: China edition (default) vs international (codebuddy.ai). Region
+  // values are centralized in EDITIONS; --international just picks that one.
   const cfg = international
-    ? { ...DEFAULTS, serverUrl: 'https://www.codebuddy.ai', domain: 'www.codebuddy.ai' }
+    ? { ...DEFAULTS, ...EDITIONS.intl }
     : DEFAULTS;
-  if (international) console.log('[login] using international endpoints (www.codebuddy.ai)');
-  else console.log('[login] using China edition endpoints (copilot.tencent.com)');
+  if (international) console.log(`[login] using ${EDITIONS.intl.label} endpoints (${EDITIONS.intl.serverUrl})`);
+  else console.log(`[login] using ${EDITIONS.cn.label} edition endpoints (${EDITIONS.cn.serverUrl})`);
 
   let state;
   if (stateFile && existsSync(stateFile)) {
