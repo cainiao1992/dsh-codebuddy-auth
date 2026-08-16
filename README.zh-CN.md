@@ -66,6 +66,32 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 - **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
 - **退出**:"登出 codebuddy" → 清除凭据
 
+## 国际版
+
+插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),只需改聊天路由的 `baseURL`,其余全自动跟随。
+
+编辑 `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
+
+```yaml
+baseURL: https://www.codebuddy.ai/v2
+```
+
+这一个改动即驱动整套区域切换:
+
+- **聊天请求**走 `https://www.codebuddy.ai/v2`(路由的 `baseURL`)。
+- **`X-Domain` 请求头**自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就自动把它改写成 `www.codebuddy.ai`(`sync-models` 动作、登录、启动时都会刷新)。
+- **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
+
+独立的登录 CLI 用显式参数做到同样效果:
+
+```bash
+codebuddy-login --international   # 或 node bin/login-flow.mjs --international
+```
+
+不加参数即登录国内版(默认)。
+
+> 提示:把 `baseURL` 改回 `https://copilot.tencent.com/v2` 即切回国内版。
+
 ## 文件
 
 - `lib/index.js` — Cordis 宿主插件(host 组合行)。注册 `codebuddy` 工具,启动时自动刷新/同步。
@@ -78,7 +104,6 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 - `POST /v2/chat/completions` **不校验 User-Agent**,任意 UA 均可;但必须 `stream: true`(非流式返回 `code 11101`)。DSH 的 pi-ai 适配器本来就是流式,无需处理。
 - `GET /v3/config`(模型发现)**校验 User-Agent**,非 VSCode 形态的 UA 返回 400。插件的 `fetchRemoteModels` 是自己直接发请求(不经过 DSH 的 user-agent 归属覆盖),已显式携带 VSCode UA。
 - 模型按非推理模型声明(不发送 reasoning 参数),与原 OpenCode 插件行为一致;接口显示全部模型 supportsReasoning,需要的话可在路由加 `compat`。
-- 国际版:把 `baseURL` 换成 `https://www.codebuddy.ai/v2`、`X-Domain` 换成 `www.codebuddy.ai`。
 
 ## License
 

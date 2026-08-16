@@ -66,6 +66,32 @@ This removes the dependency and takes the plugin back out of the profile layer s
 - **Model updates**: after Tencent ships new models, say "sync codebuddy models" → `sync-models`
 - **Logout**: "log out of codebuddy" → clears stored credentials
 
+## International edition
+
+The plugin targets the **China edition** by default (`copilot.tencent.com` / `www.codebuddy.cn`). To use the **international edition** (`www.codebuddy.ai`), switch the chat route's `baseURL` — everything else follows automatically.
+
+Edit `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
+
+```yaml
+baseURL: https://www.codebuddy.ai/v2
+```
+
+That single change drives the whole edition switch:
+
+- **Chat requests** hit `https://www.codebuddy.ai/v2` (the route's `baseURL`).
+- **`X-Domain` header** follows the baseURL automatically — the plugin rewrites it to `www.codebuddy.ai` whenever the route points at `codebuddy.ai` (the `sync-models` action, login, and startup all refresh it).
+- **Login / refresh / model discovery** (`/v3/config`) automatically use the international endpoints, because the plugin derives its `serverUrl`/`domain` from the same `baseURL`.
+
+The standalone CLI mirrors this with an explicit flag:
+
+```bash
+codebuddy-login --international   # or node bin/login-flow.mjs --international
+```
+
+Omit it to log into the China edition (the default).
+
+> Tip: switch back to the China edition by setting `baseURL` back to `https://copilot.tencent.com/v2`.
+
 ## Files
 
 - `lib/index.js` — the Cordis host plugin (host composition row). Registers the `codebuddy` tool; refreshes/syncs at startup.
@@ -78,7 +104,6 @@ This removes the dependency and takes the plugin back out of the profile layer s
 - `POST /v2/chat/completions` **does not check User-Agent** — any UA works; but the request must be `stream: true` (non-streaming returns `code 11101`). DSH's pi-ai adapter is streaming by default, so nothing to handle.
 - `GET /v3/config` (model discovery) **does check User-Agent** — any non-VSCode-shaped UA gets a 400. The plugin's `fetchRemoteModels` sends its own direct request (bypassing DSH's user-agent attribution override) and explicitly carries a VSCode UA.
 - Models are declared as non-reasoning (no reasoning parameters sent), matching the original OpenCode plugin's behavior; the API reports supportsReasoning for every model, so add `compat` on the route if you want it.
-- International edition: switch `baseURL` to `https://www.codebuddy.ai/v2` and `X-Domain` to `www.codebuddy.ai`.
 
 ## License
 

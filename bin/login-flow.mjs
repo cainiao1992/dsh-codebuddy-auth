@@ -19,6 +19,7 @@
  *   node bin/login-flow.mjs                 # fresh flow, opens the browser
  *   node bin/login-flow.mjs --no-browser    # fresh flow, prints the URL only
  *   node bin/login-flow.mjs --state FILE    # resume a flow started elsewhere
+ *   node bin/login-flow.mjs --international # use the codebuddy.ai (international) endpoints
  */
 import { existsSync, readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -65,15 +66,25 @@ export function writeCredentials(access, refresh, filePath = credentialsPath()) 
 async function main() {
   const args = process.argv.slice(2);
   const noBrowser = args.includes('--no-browser');
+  const international = args.includes('--international');
   const stateIdx = args.indexOf('--state');
   const stateFile = stateIdx >= 0 ? args[stateIdx + 1] : null;
+
+  // Region: China edition (default) vs international (codebuddy.ai). The core
+  // helpers all take a `cfg`; overriding just serverUrl/domain switches every
+  // OAuth call to the target region without touching DEFAULTS.
+  const cfg = international
+    ? { ...DEFAULTS, serverUrl: 'https://www.codebuddy.ai', domain: 'www.codebuddy.ai' }
+    : DEFAULTS;
+  if (international) console.log('[login] using international endpoints (www.codebuddy.ai)');
+  else console.log('[login] using China edition endpoints (copilot.tencent.com)');
 
   let state;
   if (stateFile && existsSync(stateFile)) {
     state = readFileSync(stateFile, 'utf8').trim();
     console.log(`[login] resuming state ${state}`);
   } else {
-    const authState = await requestAuthState(DEFAULTS);
+    const authState = await requestAuthState(cfg);
     state = authState.state;
     console.log(`[login] login URL: ${authState.url}`);
     if (!noBrowser) {
@@ -90,7 +101,7 @@ async function main() {
     }
   }
 
-  const hit = await pollForToken(state, { timeoutMs: 9 * 60 * 1000 });
+  const hit = await pollForToken(state, { timeoutMs: 9 * 60 * 1000, cfg });
   if (!hit) {
     console.error('[login] FAILED: timed out waiting for browser login (state is one-shot; run again)');
     process.exitCode = 2;
