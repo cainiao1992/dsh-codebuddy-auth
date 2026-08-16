@@ -48,7 +48,7 @@ cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 # 不想开浏览器(远程/服务器)加 --no-browser
 ```
 
-CLI 只写凭据;路由的创建与身份头、模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
+CLI 会写入凭据**并确保** `settings.yaml` 里有 `llm-pi-ai.providers.codebuddy` 路由(默认国内版;`--international` 会预建国际版路由)。身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
 
 ### 卸载
 
@@ -68,27 +68,25 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 
 ## 国际版
 
-插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),只需改聊天路由的 `baseURL`,其余全自动跟随。
-
-编辑 `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
-
-```yaml
-baseURL: https://www.codebuddy.ai/v2
-```
-
-这一个改动即驱动整套区域切换:
-
-- **聊天请求**走 `https://www.codebuddy.ai/v2`(路由的 `baseURL`)。
-- **`X-Domain` 请求头**自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就自动把它改写成 `www.codebuddy.ai`(`sync-models` 动作、登录、启动时都会刷新)。
-- **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
-
-独立的登录 CLI 用显式参数做到同样效果:
+插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),最简单的方式是用 CLI 的 `--international` 登录——它不只登录到 `codebuddy.ai`,还会**帮你把 `llm-pi-ai.providers.codebuddy` 路由指向国际版 API**,因此全新安装(还没有路由、插件还没跑过)也能直接走国际版:
 
 ```bash
 codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 ```
 
-不加参数即登录国内版(默认)。
+其余全自动跟随:
+
+- **聊天请求**走 `https://www.codebuddy.ai/v2`(路由的 `baseURL`)。
+- **`X-Domain` 请求头**自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就自动把它改写成 `www.codebuddy.ai`(`sync-models` 动作、登录、启动时都会刷新)。
+- **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
+
+如果路由已存在,也可以直接编辑 `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
+
+```yaml
+baseURL: https://www.codebuddy.ai/v2
+```
+
+不加 `--international` 即登录国内版(默认)。
 
 > 提示:把 `baseURL` 改回 `https://copilot.tencent.com/v2` 即切回国内版。
 

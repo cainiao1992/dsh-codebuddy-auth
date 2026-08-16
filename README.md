@@ -48,7 +48,7 @@ cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 # Add --no-browser on a remote server / headless box
 ```
 
-The CLI only writes credentials; the plugin creates the route and fills in identity headers and the model list at its next startup (or when the `codebuddy` tool is invoked).
+The CLI writes the credentials **and** ensures the `llm-pi-ai.providers.codebuddy` route exists in `settings.yaml` (China edition by default; `--international` pre-creates an international route). The plugin fills in identity headers and the model list at its next startup (or when the `codebuddy` tool is invoked).
 
 ### Uninstall
 
@@ -68,27 +68,25 @@ This removes the dependency and takes the plugin back out of the profile layer s
 
 ## International edition
 
-The plugin targets the **China edition** by default (`copilot.tencent.com` / `www.codebuddy.cn`). To use the **international edition** (`www.codebuddy.ai`), switch the chat route's `baseURL` — everything else follows automatically.
-
-Edit `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
-
-```yaml
-baseURL: https://www.codebuddy.ai/v2
-```
-
-That single change drives the whole edition switch:
-
-- **Chat requests** hit `https://www.codebuddy.ai/v2` (the route's `baseURL`).
-- **`X-Domain` header** follows the baseURL automatically — the plugin rewrites it to `www.codebuddy.ai` whenever the route points at `codebuddy.ai` (the `sync-models` action, login, and startup all refresh it).
-- **Login / refresh / model discovery** (`/v3/config`) automatically use the international endpoints, because the plugin derives its `serverUrl`/`domain` from the same `baseURL`.
-
-The standalone CLI mirrors this with an explicit flag:
+The plugin targets the **China edition** by default (`copilot.tencent.com` / `www.codebuddy.cn`). To use the **international edition** (`www.codebuddy.ai`), the easiest path is to log in with the CLI's `--international` flag — it not only logs you into `codebuddy.ai` but also **creates/points the `llm-pi-ai.providers.codebuddy` route at the international API for you**, so a fresh install (no route yet, plugin not yet run) goes straight to the international edition:
 
 ```bash
 codebuddy-login --international   # or node bin/login-flow.mjs --international
 ```
 
-Omit it to log into the China edition (the default).
+Everything else follows automatically:
+
+- **Chat requests** hit `https://www.codebuddy.ai/v2` (the route's `baseURL`).
+- **`X-Domain` header** follows the baseURL automatically — the plugin rewrites it to `www.codebuddy.ai` whenever the route points at `codebuddy.ai` (the `sync-models` action, login, and startup all refresh it).
+- **Login / refresh / model discovery** (`/v3/config`) automatically use the international endpoints, because the plugin derives its `serverUrl`/`domain` from the same `baseURL`.
+
+If the route already exists, you can also just edit `~/.dsh/settings.yaml` → `llm-pi-ai.providers.codebuddy`:
+
+```yaml
+baseURL: https://www.codebuddy.ai/v2
+```
+
+Omit `--international` to log into the China edition (the default).
 
 > Tip: switch back to the China edition by setting `baseURL` back to `https://copilot.tencent.com/v2`.
 
