@@ -68,7 +68,13 @@ llm-pi-ai:
 也可以在 DSH 外用 CLI(headless / 提前引导):
 
 ```bash
-npx codebuddy-login            # 或 node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
+# 按第 1 步装进 profile 后直接运行(无 npm 依赖,仅需 Node >= 18):
+node ~/.dsh/profiles/web/node_modules/dsh-codebuddy-auth/bin/login-flow.mjs
+
+# 或经 package.json 的 bin 字段从安装目录本地解析:
+cd ~/.dsh/profiles/web && npm exec codebuddy-login
+
+# 不想开浏览器(远程/服务器)加 --no-browser
 ```
 
 CLI 只写凭据;身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
