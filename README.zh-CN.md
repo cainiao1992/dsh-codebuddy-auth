@@ -92,18 +92,16 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 
 ### 推理
 
-CodeBuddy 模型按真实推理能力声明,模型选择器里会显示每个模型支持的推理等级(支持关闭推理的模型还有 **off** 档):
+每个模型都按 `/v3/config` 报告的**完整真实推理能力**声明,模型选择器里展示该模型实际支持的等级——报告 `canDisableThinking` 的模型还有 **off** 档(如 `deepseek-v4-pro`、`glm-5.2`;`hy3` 只能推理,没有 off):
 
-- **推理等级**:在模型选择器里按模型选等级(如 `low` / `medium` / `high` / `xhigh`),按 `reasoning: { effort }` 发送。
-- **关闭推理**:报告 `canDisableThinking` 的模型在选择器里有 `off` 选项。
-- **全局覆盖**(可选):在路由上设 `reasoning`,可强制所有模型用同一等级,或设 `off` 全部声明为非推理:
+- **可选等级**(按模型):`supportedEfforts` 原样进选择器——`deepseek-v4-pro` 可选 `low` / `high` / `xhigh` / `off`,`hy3` 可选 `low` / `high`,固定等级模型(如 `glm-5.1`)只有 `medium` 一档。按 `reasoning: { effort }` 发送。
+- **默认等级**:什么都不配时,请求不带 effort,每个模型回落到**自己服务端的默认值**(`auto` / `hy3` / `glm-5.2` / `deepseek-v4-*` 为 `high`,其余多为 `medium`)。
+- **覆盖默认**(可选):路由级 `reasoning` 字段——DSH 原生配置,非本插件私有——设置整条路由的请求默认等级。它只改**默认值**,选择器里所有已声明等级仍然可选:
 
 ```yaml
 # ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
-reasoning: high   # 或: off | low | medium | high | xhigh | auto(默认)
+reasoning: high   # off | minimal | low | medium | high | xhigh | max;不配则用各模型自身默认
 ```
-
-`auto`(默认)按各模型自身元数据;只在需要强制覆盖时才设置。改完重新 `sync-models`(或重启)。
 
 ## 文件
 

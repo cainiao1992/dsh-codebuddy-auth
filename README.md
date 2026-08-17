@@ -92,18 +92,16 @@ Omit `--international` to log into the China edition (the default).
 
 ### Reasoning
 
-CodeBuddy models are declared with their real reasoning capability, so the model picker shows the reasoning levels each model offers (and an **off** level on models that can disable thinking):
+Each model is declared with its **full real reasoning capability** from `/v3/config`, so the model picker shows the levels each model actually offers — plus an **off** level on models that report `canDisableThinking` (e.g. `deepseek-v4-pro`, `glm-5.2`; `hy3` is reasoning-only and gets no `off`):
 
-- **Reasoning level**: pick a level (e.g. `low` / `medium` / `high` / `xhigh`) per model in the picker; it is sent as `reasoning: { effort }`.
-- **Toggle reasoning off**: models that report `canDisableThinking` expose an `off` option in the picker.
-- **Global override** (optional): set `reasoning` on the route to force every model to one level, or `off` to declare them all non-reasoning:
+- **Selectable levels** (per model): `supportedEfforts` mirrors straight into the picker — `deepseek-v4-pro` offers `low` / `high` / `xhigh` / `off`, `hy3` offers `low` / `high`, fixed-effort models (e.g. `glm-5.1`) offer their single `medium`. Sent as `reasoning: { effort }`.
+- **Default level**: with nothing configured, no effort is sent and each model falls back to its **own server-side default** (`high` for `auto` / `hy3` / `glm-5.2` / `deepseek-v4-*`, `medium` for the rest).
+- **Override the default** (optional): the route-level `reasoning` field — a native DSH setting, not plugin-specific — sets the request default for every model on the route. It only changes the **default**; every declared level stays selectable in the picker:
 
 ```yaml
 # ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
-reasoning: high   # or: off | low | medium | high | xhigh | auto (default)
+reasoning: high   # off | minimal | low | medium | high | xhigh | max; omit to keep each model's own default
 ```
-
-`auto` (the default) mirrors each model's own metadata; set it only to force an override. Re-run `sync-models` (or restart) after changing it.
 
 ## Files
 
