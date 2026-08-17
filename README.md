@@ -90,6 +90,21 @@ Omit `--international` to log into the China edition (the default).
 - **Model updates**: after Tencent ships new models, say "sync codebuddy models" → `sync-models`
 - **Logout**: "log out of codebuddy" → clears stored credentials
 
+### Reasoning
+
+CodeBuddy models are declared with their real reasoning capability, so the model picker shows the reasoning levels each model offers (and an **off** level on models that can disable thinking):
+
+- **Reasoning level**: pick a level (e.g. `low` / `medium` / `high` / `xhigh`) per model in the picker; it is sent as `reasoning: { effort }`.
+- **Toggle reasoning off**: models that report `canDisableThinking` expose an `off` option in the picker.
+- **Global override** (optional): set `reasoning` on the route to force every model to one level, or `off` to declare them all non-reasoning:
+
+```yaml
+# ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
+reasoning: high   # or: off | low | medium | high | xhigh | auto (default)
+```
+
+`auto` (the default) mirrors each model's own metadata; set it only to force an override. Re-run `sync-models` (or restart) after changing it.
+
 ## Files
 
 - `lib/index.js` — the Cordis host plugin (host composition row). Registers the `codebuddy` tool; refreshes/syncs at startup.
@@ -101,7 +116,7 @@ Omit `--international` to log into the China edition (the default).
 
 - `POST /v2/chat/completions` **does not check User-Agent** — any UA works; but the request must be `stream: true` (non-streaming returns `code 11101`). DSH's pi-ai adapter is streaming by default, so nothing to handle.
 - `GET /v3/config` (model discovery) **does check User-Agent** — any non-VSCode-shaped UA gets a 400. The plugin's `fetchRemoteModels` sends its own direct request (bypassing DSH's user-agent attribution override) and explicitly carries a VSCode UA.
-- Models are declared as non-reasoning (no reasoning parameters sent), matching the original OpenCode plugin's behavior; the API reports supportsReasoning for every model, so add `compat` on the route if you want it.
+- CodeBuddy reports `supportsReasoning` on every craft model. Models are now declared with their real reasoning capability (levels per `supportedEfforts`, an `off` level when `canDisableThinking`, and `compat` for the `reasoning: { effort }` wire format), so reasoning is selectable in the model picker rather than stripped.
 
 ## License
 

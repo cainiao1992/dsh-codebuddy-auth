@@ -90,6 +90,21 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 - **模型更新**:腾讯上新模型后,说 "同步 codebuddy 模型" → `sync-models`
 - **退出**:"登出 codebuddy" → 清除凭据
 
+### 推理
+
+CodeBuddy 模型按真实推理能力声明,模型选择器里会显示每个模型支持的推理等级(支持关闭推理的模型还有 **off** 档):
+
+- **推理等级**:在模型选择器里按模型选等级(如 `low` / `medium` / `high` / `xhigh`),按 `reasoning: { effort }` 发送。
+- **关闭推理**:报告 `canDisableThinking` 的模型在选择器里有 `off` 选项。
+- **全局覆盖**(可选):在路由上设 `reasoning`,可强制所有模型用同一等级,或设 `off` 全部声明为非推理:
+
+```yaml
+# ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
+reasoning: high   # 或: off | low | medium | high | xhigh | auto(默认)
+```
+
+`auto`(默认)按各模型自身元数据;只在需要强制覆盖时才设置。改完重新 `sync-models`(或重启)。
+
 ## 文件
 
 - `lib/index.js` — Cordis 宿主插件(host 组合行)。注册 `codebuddy` 工具,启动时自动刷新/同步。
@@ -101,7 +116,7 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 
 - `POST /v2/chat/completions` **不校验 User-Agent**,任意 UA 均可;但必须 `stream: true`(非流式返回 `code 11101`)。DSH 的 pi-ai 适配器本来就是流式,无需处理。
 - `GET /v3/config`(模型发现)**校验 User-Agent**,非 VSCode 形态的 UA 返回 400。插件的 `fetchRemoteModels` 是自己直接发请求(不经过 DSH 的 user-agent 归属覆盖),已显式携带 VSCode UA。
-- 模型按非推理模型声明(不发送 reasoning 参数),与原 OpenCode 插件行为一致;接口显示全部模型 supportsReasoning,需要的话可在路由加 `compat`。
+- CodeBuddy 对每个 craft 模型都报告 `supportsReasoning`。模型现按真实推理能力声明(按 `supportedEfforts` 列出等级、`canDisableThinking` 时加 `off` 档、并带 `compat` 以使用 `reasoning: { effort }` wire 格式),因此推理可在模型选择器里直接选用,而非被剥离。
 
 ## License
 
