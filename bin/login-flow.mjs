@@ -30,8 +30,8 @@ import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  DEFAULTS,
   EDITIONS,
+  cfgForEdition,
   buildRouteTemplate,
   requestAuthState,
   pollForToken,
@@ -205,9 +205,7 @@ async function main() {
 
   // Region: China edition (default) vs international (codebuddy.ai). Region
   // values are centralized in EDITIONS; --international just picks that one.
-  const cfg = international
-    ? { ...DEFAULTS, ...EDITIONS.intl }
-    : DEFAULTS;
+  const cfg = cfgForEdition(international ? 'intl' : 'cn');
   if (international) console.log(`[login] using ${EDITIONS.intl.label} endpoints (${EDITIONS.intl.serverUrl})`);
   else console.log(`[login] using ${EDITIONS.cn.label} edition endpoints (${EDITIONS.cn.serverUrl})`);
 
