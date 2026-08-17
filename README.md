@@ -2,21 +2,22 @@
 
 English | [简体中文](README.zh-CN.md)
 
-A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) port of [kuops/opencode-codebuddy-auth](https://github.com/kuops/opencode-codebuddy-auth) — use Tencent CodeBuddy (IOA) chat models directly in DSH: browser OAuth login, automatic token renewal, and automatic model-list sync. Log in once, and craft-agent models such as `deepseek-v4-pro`, `glm-5.2`, `kimi-k3-1`, and `minimax-m3` appear in the model picker.
+Use [Tencent CodeBuddy](https://www.codebuddy.cn) (IOA) chat models directly in [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH): browser OAuth login, automatic token renewal, and model-list sync. Log in once, and craft-agent models such as `deepseek-v4-pro`, `glm-5.2`, `kimi-k3-1`, and `minimax-m3` appear in the model picker.
 
 ## How it works
 
-This plugin registers a **native ctx.llm adapter** (ported from [shatyuka/dsh-llm-codebuddy](https://github.com/shatyuka/dsh-llm-codebuddy), MIT) and owns the chat wire itself: minimal identity headers, the CLI client User-Agent, and its own SSE streaming + message serialization — no shared pi-ai route, so no attribution-UA override and no IDE identity block:
+The plugin registers a **native `ctx.llm` adapter** on the `codebuddy` provider and owns the whole request path: browser OAuth, token storage in `ctx.credentials`, model discovery from `/v3/config`, and its own SSE streaming + message serialization. Two deliberate identities, one per plane:
 
-| OpenCode plugin | DSH equivalent |
-| --- | --- |
-| `config` hook: register provider + discover models from `/v3/config` | a native adapter registering the `codebuddy` route on `ctx.llm`, reading the catalog live from `/v3/config` (5-min cache) |
-| `auth` hook: IOA browser OAuth + polling + refresh | the `codebuddy` model tool (`login` / `status` / `refresh` / `logout` / `sync-models`) + renewal at startup and every 30 min |
-| token stored in `auth.json` | the `ctx.credentials` service (`~/.dsh/.credentials.yaml`, resolved per request, hot-swapped) |
+| Plane | Identity | Why |
+| --- | --- | --- |
+| Chat (`POST /v2/chat/completions`) | CLI client (`User-Agent: CLI/2.96.0 CodeBuddy/2.96.0`, minimal headers) | The CLI identity is what the chat endpoint expects; using it avoids IDE-identity blocks. |
+| Model discovery (`GET /v3/config`) | Craft / VSCode (`X-Agent-Intent: craft`, `X-IDE-*`) | The craft catalog is the only one disclosing per-model reasoning metadata (`supportedEfforts`, `canDisableThinking`, `defaultEffort`) and the curated model list. The CLI catalog answers the same endpoint but carries only fixed `effort` values. |
+
+The catalog is cached for 5 minutes and refreshed on demand (`sync-models`).
 
 ## Installation
 
-DSH installs profile plugins through its official `dsh plugin` CLI (a thin `pnpm` forwarder that installs the dependency, appends the package to the profile's `dsh.profile.bundles` layer stack, and mounts the plugin via the bundle's in-package patch — no manual file editing).
+DSH installs profile plugins through its official `dsh plugin` CLI (a thin `pnpm` forwarder: installs the dependency, appends the package to the profile's `dsh.profile.bundles` layer stack, and mounts the plugin via the bundle's in-package patch — no manual file editing).
 
 **Prerequisite**: make sure `pnpm` is on your `PATH`, e.g. via Homebrew:
 
@@ -34,7 +35,7 @@ This single command resolves the dependency from GitHub, installs it, and activa
 
 ### Restart DSH
 
-Restart DSH. The plugin registers the `codebuddy` route natively on `ctx.llm` at startup (a legacy `llm-pi-ai` settings route from earlier versions is removed automatically), so CodeBuddy already appears in the Models page — unauthenticated — before you log in.
+Restart DSH. The plugin registers the `codebuddy` provider natively on `ctx.llm` at startup, so CodeBuddy already appears in the Models page — unauthenticated — before you log in.
 
 ## Log in
 
@@ -42,7 +43,7 @@ You can log in either through the agent, or from the command line. Pick one.
 
 ### Option A — through the agent
 
-Tell the agent **"log in with codebuddy"**. The agent calls the `codebuddy` tool, which opens the IOA login page in your browser and polls in the background; once the token arrives it writes credentials and warms the catalog, and the next request hits the chat endpoint directly with the CLI client identity.
+Tell the agent **"log in with codebuddy"**. The agent calls the `codebuddy` tool, which opens the IOA login page in your browser and polls in the background; once the token arrives it writes credentials and warms the catalog, and the next request hits the chat endpoint directly.
 
 ### Option B — from the command line (headless / bootstrapping)
 
@@ -89,24 +90,24 @@ The adapter and the login/model-discovery endpoints then all use `www.codebuddy.
 
 ### Reasoning
 
-Each model is declared with its **full real reasoning capability** from `/v3/config`, so the model picker shows the levels each model actually offers — plus an **off** level on models that report `canDisableThinking` (e.g. `deepseek-v4-pro`, `glm-5.2`; `hy3` is reasoning-only and gets no `off`):
+Each model is declared with its **full real reasoning capability** from `/v3/config`, so the model picker shows the levels each model actually offers:
 
-- **Selectable levels** (per model): `supportedEfforts` mirrors straight into the picker — `deepseek-v4-pro` offers `low` / `high` / `xhigh` / `off`, `hy3` offers `low` / `high`, fixed-effort models (e.g. `glm-5.1`) offer their single `medium`. Sent as `reasoning: { effort }`.
-- **Default level**: with nothing configured, no effort is sent and each model falls back to its **own server-side default** (`high` for `auto` / `hy3` / `glm-5.2` / `deepseek-v4-*`, `medium` for the rest).
-- **Default level**: each model uses the `defaultEffort` its `/v3/config` entry reports (e.g. glm-5.2 defaults to High); every declared level stays selectable in the picker.
+- **Selectable levels** (per model): `supportedEfforts` mirrors straight into the picker — `deepseek-v4-pro` offers `low` / `high` / `xhigh`, `hy3` offers `low` / `high`, fixed-effort models (e.g. `glm-5.1`) offer their single `medium`. Sent on the wire as `reasoning_effort: "<level>"`.
+- **Default level**: each model uses the `defaultEffort` its `/v3/config` entry reports (e.g. `glm-5.2` defaults to `high`); every declared level stays selectable in the picker.
 
 ## Files
 
-- `lib/index.js` — the Cordis host plugin (host composition row). Registers the `codebuddy` tool; refreshes/syncs at startup.
-- `lib/codebuddy-core.mjs` — core OAuth, JWT decoding, and `/v3/config` discovery logic; dependency-free.
+- `lib/index.js` — the Cordis host plugin (host composition row). Registers the `codebuddy` provider and the `codebuddy` tool; refreshes/syncs at startup and every 30 minutes.
+- `lib/codebuddy-adapter.mjs` — the native `ctx.llm` adapter: SSE streaming, message serialization, reasoning metadata, error mapping. Ported from [shatyuka/dsh-llm-codebuddy](https://github.com/shatyuka/dsh-llm-codebuddy) (MIT).
+- `lib/codebuddy-core.mjs` — OAuth, JWT decoding, identity headers, and `/v3/config` discovery; dependency-free.
 - `bin/login-flow.mjs` — standalone login CLI; no npm dependencies.
 - `cordis.patch.yml` — in-package patch (self-mount row for bundle consumers).
 
 ## Known limitations (all verified empirically)
 
-- `POST /v2/chat/completions` **does not check User-Agent** — any UA works; but the request must be `stream: true` (non-streaming returns `code 11101`). DSH's pi-ai adapter is streaming by default, so nothing to handle.
-- `GET /v3/config` (model discovery) **does check User-Agent** — any non-VSCode-shaped UA gets a 400. The plugin's `fetchRemoteModels` sends its own direct request (bypassing DSH's user-agent attribution override) and explicitly carries a VSCode UA.
-- CodeBuddy reports `supportsReasoning` on every craft model. Models are now declared with their real reasoning capability (levels per `supportedEfforts`, an `off` level when `canDisableThinking`, and `compat` for the `reasoning: { effort }` wire format), so reasoning is selectable in the model picker rather than stripped.
+- `POST /v2/chat/completions` **does not check User-Agent** — any UA works; but the request must be `stream: true` (non-streaming returns `code 11101`). DSH's llm adapters are streaming by default, so nothing to handle.
+- `GET /v3/config` (model discovery) requires the craft / VSCode identity (`X-Agent-Intent: craft` + `X-IDE-*` headers) to disclose reasoning metadata; the plugin sends its own direct request for that.
+- CodeBuddy reports `supportsReasoning` on every craft model. Models are declared with their real reasoning capability (levels per `supportedEfforts`), so reasoning is selectable in the model picker rather than stripped.
 
 ## License
 
