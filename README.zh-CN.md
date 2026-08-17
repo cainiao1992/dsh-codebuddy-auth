@@ -6,12 +6,12 @@
 
 ## 工作原理
 
-原 OpenCode 插件靠三个 hook 工作;本包把它们分别落到 DSH 的原生接缝上,请求路径零拦截(DSH 的 pi-ai 适配器原生说 OpenAI-completions 协议,凭据值自动作为 `Authorization: Bearer` 发送,路由 `headers` 原样透传):
+本插件注册一个**原生 ctx.llm 适配器**(移植自 [shatyuka/dsh-llm-codebuddy](https://github.com/shatyuka/dsh-llm-codebuddy),MIT),自己持有聊天请求:极简身份头 + CLI 客户端 User-Agent + 自有的 SSE 流式与消息序列化——不经共享 pi-ai 路由,因此没有归属 UA 覆盖、没有 IDE 身份块:
 
 | OpenCode 插件 | DSH 等价物 |
 | --- | --- |
-| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | `llm-pi-ai.providers.codebuddy` 路由——插件**首次启动时自动创建**,登录后把真实模型列表同步进去 |
-| `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | 插件注册的 `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动时自动续期 |
+| `config` hook:注册 provider + 从 `/v3/config` 发现模型 | 原生适配器直接在 `ctx.llm` 上注册 `codebuddy` 路由,模型目录实时读自 `/v3/config`(5 分钟缓存) |
+| `auth` hook:IOA 浏览器 OAuth + 轮询 + 刷新 | `codebuddy` 模型工具(`login` / `status` / `refresh` / `logout` / `sync-models`)+ 启动及每 30 分钟自动续期 |
 | token 存 `auth.json` | `ctx.credentials` 凭据服务(`~/.dsh/.credentials.yaml`,逐请求解析,热生效) |
 
 ## 安装
@@ -34,7 +34,7 @@ dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
 
 ### 重启 DSH
 
-重启 DSH,安装即完成——首次启动时插件会**自动创建 `llm-pi-ai.providers.codebuddy` 路由**(带一个占位模型表),因此 CodeBuddy 未登录也会出现在模型页。
+重启 DSH,安装即完成——插件启动时在 `ctx.llm` 上原生注册 `codebuddy` 路由(若存在旧版遗留的 `llm-pi-ai` settings 路由会自动移除),CodeBuddy 随即出现在模型页。
 
 ## 登录
 
@@ -42,7 +42,7 @@ dsh plugin --profile web add github:cainiao1992/dsh-codebuddy-auth
 
 ### 方式一:通过 agent
 
-对 agent 说 **"用 codebuddy 登录"**。agent 调用 `codebuddy` 工具:浏览器打开 IOA 登录页,后台轮询;token 到手后自动写入凭据、把 JWT 派生的 `X-User-Id` 等身份头写进路由、并把占位模型替换成你账号在 `/v3/config` 的真实列表。
+对 agent 说 **"用 codebuddy 登录"**。agent 调用 `codebuddy` 工具:浏览器打开 IOA 登录页,后台轮询;token 到手后写入凭据并预热模型目录,下一个请求即以 CLI 客户端身份直连聊天端点。
 
 ### 方式二:命令行(headless / 提前引导)
 
@@ -56,7 +56,7 @@ cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 # 不想开浏览器(远程/服务器)加 --no-browser
 ```
 
-CLI 会写入凭据**并确保** `settings.yaml` 里有 `llm-pi-ai.providers.codebuddy` 路由(默认国内版;`--international` 会预建国际版路由)。身份头与模型列表由已挂载的插件在下一次启动时(或调用 `codebuddy` 工具时)补齐。
+CLI 只写凭据——原生适配器自己持有路由,没有 settings 路由需要管理;`--international` 仅选择登录走的 OAuth 端点。
 
 ## 卸载
 
@@ -68,19 +68,16 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 
 ## 国际版
 
-插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。要切换到**国际版**(`www.codebuddy.ai`),用 CLI 的 `--international` 登录——它不只登录到 `codebuddy.ai`,还会把 `llm-pi-ai.providers.codebuddy` 路由指向国际版 API,因此全新安装(还没有路由)也能直接走国际版:
+插件默认使用**国内版**(`copilot.tencent.com` / `www.codebuddy.cn`)。国际版(`www.codebuddy.ai`)通过挂载行的 `edition: intl` 配置选择:
 
-```bash
-codebuddy-login --international   # 或 node bin/login-flow.mjs --international
+```yaml
+# 你的 cordis.patch.yml 挂载行:
+- id: codebuddy-auth
+  name: dsh-codebuddy-auth
+  edition: intl          # 缺省即国内版
 ```
 
-其余全自动跟随:
-
-- **聊天请求**走 `https://www.codebuddy.ai/v2`(路由的 `baseURL`)。
-- **`X-Domain`** 自动跟随 `baseURL`——只要路由指向 `codebuddy.ai`,插件就把它改写成 `www.codebuddy.ai`。
-- **登录 / 刷新 / 模型发现**(`/v3/config`)自动使用国际端点,因为插件从同一个 `baseURL` 反推 `serverUrl` / `domain`。
-
-不加 `--international` 即登录国内版(默认)。
+适配器与登录/模型发现随即全部使用 `www.codebuddy.ai` 端点。CLI 的 `--international` 仅为登录选择国际 OAuth 端点。
 
 ## 使用
 
@@ -96,12 +93,7 @@ codebuddy-login --international   # 或 node bin/login-flow.mjs --international
 
 - **可选等级**(按模型):`supportedEfforts` 原样进选择器——`deepseek-v4-pro` 可选 `low` / `high` / `xhigh` / `off`,`hy3` 可选 `low` / `high`,固定等级模型(如 `glm-5.1`)只有 `medium` 一档。按 `reasoning: { effort }` 发送。
 - **默认等级**:什么都不配时,请求不带 effort,每个模型回落到**自己服务端的默认值**(`auto` / `hy3` / `glm-5.2` / `deepseek-v4-*` 为 `high`,其余多为 `medium`)。
-- **覆盖默认**(可选):路由级 `reasoning` 字段——DSH 原生配置,非本插件私有——设置整条路由的请求默认等级。它只改**默认值**,选择器里所有已声明等级仍然可选:
-
-```yaml
-# ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
-reasoning: high   # off | minimal | low | medium | high | xhigh | max;不配则用各模型自身默认
-```
+- **默认等级**:每模型直接采用 `/v3/config` 报告的 `defaultEffort`(如 glm-5.2 默认 High),选择器里所有已声明等级仍可自由选。
 
 ## 文件
 

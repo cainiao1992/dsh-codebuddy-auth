@@ -6,12 +6,12 @@ A [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) port
 
 ## How it works
 
-The original OpenCode plugin works through three hooks; this package maps each one onto a native DSH seam, with zero interception on the request path (DSH's pi-ai adapter natively speaks the OpenAI-completions protocol, the credential is sent automatically as `Authorization: Bearer`, and route `headers` pass through verbatim):
+This plugin registers a **native ctx.llm adapter** (ported from [shatyuka/dsh-llm-codebuddy](https://github.com/shatyuka/dsh-llm-codebuddy), MIT) and owns the chat wire itself: minimal identity headers, the CLI client User-Agent, and its own SSE streaming + message serialization — no shared pi-ai route, so no attribution-UA override and no IDE identity block:
 
 | OpenCode plugin | DSH equivalent |
 | --- | --- |
-| `config` hook: register provider + discover models from `/v3/config` | the `llm-pi-ai.providers.codebuddy` route, which the plugin **creates on first boot** and syncs your account's real model list into after login |
-| `auth` hook: IOA browser OAuth + polling + refresh | the `codebuddy` model tool (`login` / `status` / `refresh` / `logout` / `sync-models`) + automatic renewal at startup |
+| `config` hook: register provider + discover models from `/v3/config` | a native adapter registering the `codebuddy` route on `ctx.llm`, reading the catalog live from `/v3/config` (5-min cache) |
+| `auth` hook: IOA browser OAuth + polling + refresh | the `codebuddy` model tool (`login` / `status` / `refresh` / `logout` / `sync-models`) + renewal at startup and every 30 min |
 | token stored in `auth.json` | the `ctx.credentials` service (`~/.dsh/.credentials.yaml`, resolved per request, hot-swapped) |
 
 ## Installation
@@ -34,7 +34,7 @@ This single command resolves the dependency from GitHub, installs it, and activa
 
 ### Restart DSH
 
-Restart DSH. On first boot the plugin **creates the `llm-pi-ai.providers.codebuddy` route itself** (with a placeholder model list), so CodeBuddy already appears in the Models page — unauthenticated — before you log in.
+Restart DSH. The plugin registers the `codebuddy` route natively on `ctx.llm` at startup (a legacy `llm-pi-ai` settings route from earlier versions is removed automatically), so CodeBuddy already appears in the Models page — unauthenticated — before you log in.
 
 ## Log in
 
@@ -42,7 +42,7 @@ You can log in either through the agent, or from the command line. Pick one.
 
 ### Option A — through the agent
 
-Tell the agent **"log in with codebuddy"**. The agent calls the `codebuddy` tool, which opens the IOA login page in your browser, polls in the background, and once the token arrives automatically writes credentials, writes JWT-derived identity headers (`X-User-Id` etc.) into the route, and replaces the placeholder models with your account's real `/v3/config` list.
+Tell the agent **"log in with codebuddy"**. The agent calls the `codebuddy` tool, which opens the IOA login page in your browser and polls in the background; once the token arrives it writes credentials and warms the catalog, and the next request hits the chat endpoint directly with the CLI client identity.
 
 ### Option B — from the command line (headless / bootstrapping)
 
@@ -56,7 +56,7 @@ cd ~/.dsh/profiles/web && pnpm exec codebuddy-login
 # Add --no-browser on a remote server / headless box
 ```
 
-The CLI writes the credentials **and** ensures the `llm-pi-ai.providers.codebuddy` route exists in `settings.yaml` (China edition by default; `--international` pre-creates an international route). The plugin fills in identity headers and the model list at its next startup (or when the `codebuddy` tool is invoked).
+The CLI only writes the credentials — the native adapter owns the route, so there is no settings route to manage; `--international` merely selects the OAuth endpoints the login itself uses.
 
 ## Uninstall
 
@@ -68,19 +68,16 @@ This removes the dependency and takes the plugin back out of the profile layer s
 
 ## International edition
 
-The plugin targets the **China edition** by default (`copilot.tencent.com` / `www.codebuddy.cn`). To use the **international edition** (`www.codebuddy.ai`), log in with the CLI's `--international` flag — it not only logs you into `codebuddy.ai`, but also points the `llm-pi-ai.providers.codebuddy` route at the international API for you, so a fresh install (no route yet) goes straight to the international edition:
+The plugin targets the **China edition** by default (`copilot.tencent.com` / `www.codebuddy.cn`). Select the **international edition** (`www.codebuddy.ai`) through the mount row's `edition: intl` config:
 
-```bash
-codebuddy-login --international   # or node bin/login-flow.mjs --international
+```yaml
+# your cordis.patch.yml mount row:
+- id: codebuddy-auth
+  name: dsh-codebuddy-auth
+  edition: intl          # omitted = China edition
 ```
 
-Everything else follows automatically:
-
-- **Chat requests** hit `https://www.codebuddy.ai/v2` (the route's `baseURL`).
-- **`X-Domain`** follows the baseURL — the plugin rewrites it to `www.codebuddy.ai` whenever the route points at `codebuddy.ai`.
-- **Login / refresh / model discovery** (`/v3/config`) use the international endpoints, because the plugin derives its `serverUrl`/`domain` from the same `baseURL`.
-
-Omit `--international` to log into the China edition (the default).
+The adapter and the login/model-discovery endpoints then all use `www.codebuddy.ai`. The CLI's `--international` only selects the international OAuth endpoints for the login itself.
 
 ## Usage
 
@@ -96,12 +93,7 @@ Each model is declared with its **full real reasoning capability** from `/v3/con
 
 - **Selectable levels** (per model): `supportedEfforts` mirrors straight into the picker — `deepseek-v4-pro` offers `low` / `high` / `xhigh` / `off`, `hy3` offers `low` / `high`, fixed-effort models (e.g. `glm-5.1`) offer their single `medium`. Sent as `reasoning: { effort }`.
 - **Default level**: with nothing configured, no effort is sent and each model falls back to its **own server-side default** (`high` for `auto` / `hy3` / `glm-5.2` / `deepseek-v4-*`, `medium` for the rest).
-- **Override the default** (optional): the route-level `reasoning` field — a native DSH setting, not plugin-specific — sets the request default for every model on the route. It only changes the **default**; every declared level stays selectable in the picker:
-
-```yaml
-# ~/.dsh/settings.yaml → llm-pi-ai.providers.codebuddy
-reasoning: high   # off | minimal | low | medium | high | xhigh | max; omit to keep each model's own default
-```
+- **Default level**: each model uses the `defaultEffort` its `/v3/config` entry reports (e.g. glm-5.2 defaults to High); every declared level stays selectable in the picker.
 
 ## Files
 
