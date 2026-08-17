@@ -1,6 +1,6 @@
 {
   "name": "dsh-codebuddy-auth",
-  "version": "0.7.7",
+  "version": "0.8.0",
   "description": "CodeBuddy (Tencent IOA) provider lifecycle plugin for DeepSeek Harness: browser OAuth login, token refresh, credential storage, and /v3/config model sync for the llm-pi-ai codebuddy route.",
   "type": "module",
   "main": "lib/index.js",
