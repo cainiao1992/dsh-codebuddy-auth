@@ -15,6 +15,10 @@
 
 模型目录缓存 5 分钟,可随时 `sync-models` 刷新。
 
+## 兼容性
+
+已在 DeepSeek Harness 桌面版 **0.2.0-rc.2**(`@deepseek-ai/dsh-llm` 0.2.0-rc.2)上验证。适配器遵循当前宿主契约:tool-call id 经 `ToolCallId` 品牌化(`CallId` 已不存在),工具结果以独立 `role: 'tool'` 消息回放。0.8.2 及更早版本把工具结果序列化成普通 user 文本,任何用到工具的对话都会在第二轮报 `CodeBuddy API error (HTTP 400)`(`11148 tool calls and tool results do not match`)。
+
 ## 安装
 
 DSH 通过官方 `dsh plugin` CLI 安装 profile 插件(它是个精简的 `pnpm` 转发器:安装依赖、把包追加到 profile 的 `dsh.profile.bundles` 层栈、再经包内的 patch 挂载插件——全程无需手动改文件)。
@@ -102,6 +106,30 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 - `lib/codebuddy-core.mjs` — OAuth、JWT 解码、身份头、`/v3/config` 发现;无依赖。
 - `bin/login-flow.mjs` — 独立登录 CLI,无 npm 依赖。
 - `cordis.patch.yml` — 包内 patch(bundle 消费时的自挂载行)。
+
+## 排障
+
+**插件管理器显示 `failed to import` / `codebuddy` 工具始终不出现(桌面版)。** 桌面版的宿主包都在 `app.asar` 里,磁盘上没有 `@deepseek-ai/dsh-llm`,profile 安装的插件解析不到它(npx 时代遗留的 profile 级软链接也会在 npx 缓存被清理后变成死链)。把该包连同依赖闭包抽取落盘一次,再把 profile 指过去:
+
+```bash
+# macOS 示例——其他平台自行调整 app 路径
+npx --yes @electron/asar extract "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar" /tmp/dsh-asar
+mkdir -p ~/.dsh/runtime-modules/node_modules/@deepseek-ai ~/.dsh/profiles/node_modules/@deepseek-ai
+cd /tmp/dsh-asar/dsh/node_modules
+cp -R zod @standard-schema ~/.dsh/runtime-modules/node_modules/
+cp -R @deepseek-ai/{cordis,cosmokit,dsh-brand,dsh-llm,dsh-timeout,dsh-typert-protocol,dsh-util-crypto,dsh-util-values,schemastery} \
+  ~/.dsh/runtime-modules/node_modules/@deepseek-ai/
+for pkg in dsh-llm cordis; do
+  ln -sfn ~/.dsh/runtime-modules/node_modules/@deepseek-ai/$pkg ~/.dsh/profiles/node_modules/@deepseek-ai/$pkg
+done
+rm -rf /tmp/dsh-asar
+```
+
+之后重启 DSH。若未来宿主新增依赖,导入报错会点名缺失的包——照同样方式拷进 `~/.dsh/runtime-modules` 即可。可用下面的命令验证:
+
+```bash
+cd ~/.dsh/profiles/desktop/node_modules/dsh-codebuddy-auth && node --input-type=module -e "await import('@deepseek-ai/dsh-llm'); console.log('ok')"
+```
 
 ## 已知限制(均为实测结论)
 

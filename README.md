@@ -15,6 +15,10 @@ The plugin registers a **native `ctx.llm` adapter** on the `codebuddy` provider 
 
 The catalog is cached for 5 minutes and refreshed on demand (`sync-models`).
 
+## Compatibility
+
+Verified against the DeepSeek Harness desktop app **0.2.0-rc.2** (`@deepseek-ai/dsh-llm` 0.2.0-rc.2). The adapter follows the current harness contract: tool-call ids are branded via `ToolCallId` (`CallId` no longer exists), and tool results replay as standalone `role: 'tool'` messages. Version 0.8.2 and older serialized tool results as plain user text, so any tool-using conversation failed with `CodeBuddy API error (HTTP 400)` (`11148 tool calls and tool results do not match`) on its second turn.
+
 ## Installation
 
 DSH installs profile plugins through its official `dsh plugin` CLI (a thin `pnpm` forwarder: installs the dependency, appends the package to the profile's `dsh.profile.bundles` layer stack, and mounts the plugin via the bundle's in-package patch — no manual file editing).
@@ -102,6 +106,30 @@ Each model is declared with its **full real reasoning capability** from `/v3/con
 - `lib/codebuddy-core.mjs` — OAuth, JWT decoding, identity headers, and `/v3/config` discovery; dependency-free.
 - `bin/login-flow.mjs` — standalone login CLI; no npm dependencies.
 - `cordis.patch.yml` — in-package patch (self-mount row for bundle consumers).
+
+## Troubleshooting
+
+**Plugin manager shows `failed to import` / the `codebuddy` tool never appears (desktop app).** In the desktop app the host's packages live inside `app.asar`, and nothing on disk provides `@deepseek-ai/dsh-llm`, so a profile-installed plugin cannot resolve it (profile-level symlinks from an npx-era install also go stale once the npx cache is pruned). Extract the package with its dependency closure once and point the profile at it:
+
+```bash
+# macOS example — adjust the app path for other platforms
+npx --yes @electron/asar extract "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar" /tmp/dsh-asar
+mkdir -p ~/.dsh/runtime-modules/node_modules/@deepseek-ai ~/.dsh/profiles/node_modules/@deepseek-ai
+cd /tmp/dsh-asar/dsh/node_modules
+cp -R zod @standard-schema ~/.dsh/runtime-modules/node_modules/
+cp -R @deepseek-ai/{cordis,cosmokit,dsh-brand,dsh-llm,dsh-timeout,dsh-typert-protocol,dsh-util-crypto,dsh-util-values,schemastery} \
+  ~/.dsh/runtime-modules/node_modules/@deepseek-ai/
+for pkg in dsh-llm cordis; do
+  ln -sfn ~/.dsh/runtime-modules/node_modules/@deepseek-ai/$pkg ~/.dsh/profiles/node_modules/@deepseek-ai/$pkg
+done
+rm -rf /tmp/dsh-asar
+```
+
+Restart DSH afterwards. If a future harness build adds a dependency, the import error names the missing package — copy it into `~/.dsh/runtime-modules` the same way. Verify with:
+
+```bash
+cd ~/.dsh/profiles/desktop/node_modules/dsh-codebuddy-auth && node --input-type=module -e "await import('@deepseek-ai/dsh-llm'); console.log('ok')"
+```
 
 ## Known limitations (all verified empirically)
 
