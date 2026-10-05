@@ -109,27 +109,29 @@ dsh plugin --profile web remove dsh-codebuddy-auth
 
 ## 排障
 
-**插件管理器显示 `failed to import` / `codebuddy` 工具始终不出现(桌面版)。** 桌面版的宿主包都在 `app.asar` 里,磁盘上没有 `@deepseek-ai/dsh-llm`,profile 安装的插件解析不到它(npx 时代遗留的 profile 级软链接也会在 npx 缓存被清理后变成死链)。把该包连同依赖闭包抽取落盘一次,再把 profile 指过去:
+**插件管理器显示 `failed to import` / `codebuddy` 工具始终不出现。** 桌面端只给一句摘要;复制一份 profile 冷启动,就能看到真正的导入错误:
 
 ```bash
-# macOS 示例——其他平台自行调整 app 路径
-npx --yes @electron/asar extract "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar" /tmp/dsh-asar
-mkdir -p ~/.dsh/runtime-modules/node_modules/@deepseek-ai ~/.dsh/profiles/node_modules/@deepseek-ai
-cd /tmp/dsh-asar/dsh/node_modules
-cp -R zod @standard-schema ~/.dsh/runtime-modules/node_modules/
-cp -R @deepseek-ai/{cordis,cosmokit,dsh-brand,dsh-llm,dsh-timeout,dsh-typert-protocol,dsh-util-crypto,dsh-util-values,schemastery} \
-  ~/.dsh/runtime-modules/node_modules/@deepseek-ai/
-for pkg in dsh-llm cordis; do
-  ln -sfn ~/.dsh/runtime-modules/node_modules/@deepseek-ai/$pkg ~/.dsh/profiles/node_modules/@deepseek-ai/$pkg
-done
-rm -rf /tmp/dsh-asar
+cp -R ~/.dsh/profiles/desktop ~/.dsh/profiles/cbprobe
+dsh --profile cbprobe --no-open   # 失败的 entry 及其原因会打到 stderr
+rm -rf ~/.dsh/profiles/cbprobe
 ```
 
-之后重启 DSH。若未来宿主新增依赖,导入报错会点名缺失的包——照同样方式拷进 `~/.dsh/runtime-modules` 即可。可用下面的命令验证:
+实测过的两种原因:
+
+- **dsh 改名了插件用到的 dsh-llm 导出。** dsh 0.2.0-rc.2 把 `CallId` 改名为 `ToolCallId`,插件 ≤0.8.2 在 ESM 链接阶段就失败(`does not provide an export named 'CallId'`),entry 保持未激活。0.8.3 已修复,按下述命令升级即可。
+- **profile 里残留的软链接**(早期手动安装遗留)占住了 `~/.dsh/profiles/<profile>/node_modules` 里的 `@deepseek-ai/*` 名字。检查并删除这类死链即可;DSH 自身会把 installation 作用域的包路由进桌面版 `app.asar` 副本,不需要抽取 asar、也不需要手动软链。
+
+升级(桌面版:先完全退出应用——该 profile 由 Electron 独占管理):
 
 ```bash
-cd ~/.dsh/profiles/desktop/node_modules/dsh-codebuddy-auth && node --input-type=module -e "await import('@deepseek-ai/dsh-llm'); console.log('ok')"
+dsh plugin --profile desktop update dsh-codebuddy-auth   # 桌面版,退出应用后执行
+dsh plugin --profile web update dsh-codebuddy-auth       # 其他 profile 随时可执行
 ```
+
+git 依赖会被 `pnpm-lock.yaml` 钉住:`pnpm install` 和重复的 `dsh plugin add` 都复用已锁定的 commit;`dsh plugin update <pkg>`(即 pnpm update)才会把 `github:<owner>/<repo>` 重新解析到新 HEAD。
+
+不要用裸 `node --input-type=module -e "import('@deepseek-ai/dsh-llm')"` 验证解析——它绕过了 DSH 的模块解析拦截,在 profile 目录里必然失败。上面探针 profile 的冷启动输出才是有效信号。
 
 ## 已知限制(均为实测结论)
 

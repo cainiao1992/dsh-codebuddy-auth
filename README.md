@@ -109,27 +109,29 @@ Each model is declared with its **full real reasoning capability** from `/v3/con
 
 ## Troubleshooting
 
-**Plugin manager shows `failed to import` / the `codebuddy` tool never appears (desktop app).** In the desktop app the host's packages live inside `app.asar`, and nothing on disk provides `@deepseek-ai/dsh-llm`, so a profile-installed plugin cannot resolve it (profile-level symlinks from an npx-era install also go stale once the npx cache is pruned). Extract the package with its dependency closure once and point the profile at it:
+**Plugin manager shows `failed to import` / the `codebuddy` tool never appears.** The desktop app reports only the summary; boot a copy of the profile to see the real import error:
 
 ```bash
-# macOS example — adjust the app path for other platforms
-npx --yes @electron/asar extract "/Applications/DeepSeek Harness.app/Contents/Resources/app.asar" /tmp/dsh-asar
-mkdir -p ~/.dsh/runtime-modules/node_modules/@deepseek-ai ~/.dsh/profiles/node_modules/@deepseek-ai
-cd /tmp/dsh-asar/dsh/node_modules
-cp -R zod @standard-schema ~/.dsh/runtime-modules/node_modules/
-cp -R @deepseek-ai/{cordis,cosmokit,dsh-brand,dsh-llm,dsh-timeout,dsh-typert-protocol,dsh-util-crypto,dsh-util-values,schemastery} \
-  ~/.dsh/runtime-modules/node_modules/@deepseek-ai/
-for pkg in dsh-llm cordis; do
-  ln -sfn ~/.dsh/runtime-modules/node_modules/@deepseek-ai/$pkg ~/.dsh/profiles/node_modules/@deepseek-ai/$pkg
-done
-rm -rf /tmp/dsh-asar
+cp -R ~/.dsh/profiles/desktop ~/.dsh/profiles/cbprobe
+dsh --profile cbprobe --no-open   # the failed entry and its cause print on stderr
+rm -rf ~/.dsh/profiles/cbprobe
 ```
 
-Restart DSH afterwards. If a future harness build adds a dependency, the import error names the missing package — copy it into `~/.dsh/runtime-modules` the same way. Verify with:
+Verified causes:
+
+- **dsh renamed a dsh-llm export the plugin imports.** dsh 0.2.0-rc.2 renamed `CallId` to `ToolCallId`; plugin ≤0.8.2 fails ESM linking (`does not provide an export named 'CallId'`) and its entry stays inactive. Fixed in 0.8.3 — upgrade below.
+- **A stale profile-level symlink** (left by an older manual setup) occupying `@deepseek-ai/*` inside `~/.dsh/profiles/<profile>/node_modules`. Check and remove such links; DSH itself routes installation-scope packages into the desktop `app.asar` copy, so no asar extraction or manual symlinks are needed.
+
+Upgrade (desktop: fully quit the app first — its profile is Electron-managed):
 
 ```bash
-cd ~/.dsh/profiles/desktop/node_modules/dsh-codebuddy-auth && node --input-type=module -e "await import('@deepseek-ai/dsh-llm'); console.log('ok')"
+dsh plugin --profile desktop update dsh-codebuddy-auth   # desktop, after quitting the app
+dsh plugin --profile web update dsh-codebuddy-auth       # other profiles, any time
 ```
+
+A git dependency stays pinned by `pnpm-lock.yaml`: `pnpm install` and a repeated `dsh plugin add` reuse the pinned commit. `dsh plugin update <pkg>` is what re-resolves `github:<owner>/<repo>` to a new HEAD.
+
+Do not verify resolution with a bare `node --input-type=module -e "import('@deepseek-ai/dsh-llm')"` — it bypasses DSH's module-resolution interception and always fails from a profile directory. The probe-profile boot above is the real signal.
 
 ## Known limitations (all verified empirically)
 
